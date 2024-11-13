@@ -100,211 +100,195 @@ interface IAave {
     ) external;
 }
 
-contract AaveTest {
-    address userAddr = msg.sender;
-    uint32 chainId = 11155111;
-    address target = address(0); //Aave pool address
+// contract AaveTest {
+//     address userAddr = msg.sender;
+//     uint32 chainId = 11155111;
+//     address target = address(0); //Aave pool address
 
-    function supplyToken() external {
-        bytes memory message = abi.encodeWithSignature(
-            "function supply(address asset,uint256 amount,address onBehalfOf,uint16 referralCode) external;",
-            address(0),
-            100,
-            msg.sender,
-            0
-        );
+//     function supplyToken() external {
+//         bytes memory message = abi.encodeWithSignature(
+//             "function supply(address asset,uint256 amount,address onBehalfOf,uint16 referralCode) external;",
+//             address(0),
+//             100,
+//             msg.sender,
+//             0
+//         );
 
-        Dispatcher.Dispatcher(address(this)).dispatch(
-            userAddr,
-            chainId,
-            message,
-            target
-        );
-    }
-}
-
-// Interface for the relay to implement
-interface IMessageRelay {
-    function sendMessage(
-        uint32 destinationChainId,
-        address recipient,
-        bytes calldata message
-    ) external returns (bytes32 messageId);
-
-    function verifyMessage(
-        bytes32 messageId,
-        uint32 sourceChainId,
-        address sender,
-        bytes calldata message
-    ) external view returns (bool);
-}
+//         Dispatcher.Dispatcher(address(this)).dispatch(
+//             userAddr,
+//             chainId,
+//             message,
+//             target
+//         );
+//     }
+// }
 
 // Contract for sending messages (on source chain)
-contract MessageDispatcher is Ownable, Pausable, ReentrancyGuard {
-    IMessageRelay public relay;
+// contract MessageDispatcher is Ownable, Pausable, ReentrancyGuard {
+//     IMessageRelay public relay;
 
-    // Message tracking
-    mapping(bytes32 => bool) public sentMessages;
-    uint256 public nonce;
+//     // Message tracking
+//     mapping(bytes32 => bool) public sentMessages;
+//     uint256 public nonce;
 
-    // Chain configuration
-    mapping(uint32 => bool) public supportedChains;
+//     // Chain configuration
+//     mapping(uint32 => bool) public supportedChains;
 
-    // Events
-    event MessageDispatched(
-        bytes32 indexed messageId,
-        uint32 destinationChainId,
-        address recipient,
-        bytes message,
-        uint256 nonce
-    );
-    event RelayUpdated(address newRelay);
-    event ChainStatusUpdated(uint32 chainId, bool supported);
+//     // Events
+//     event MessageDispatched(
+//         bytes32 indexed messageId,
+//         uint32 destinationChainId,
+//         address recipient,
+//         bytes message,
+//         uint256 nonce
+//     );
+//     event RelayUpdated(address newRelay);
+//     event ChainStatusUpdated(uint32 chainId, bool supported);
 
-    constructor(address _relay) {
-        relay = IMessageRelay(_relay);
-    }
+//     constructor(address _relay) {
+//         relay = IMessageRelay(_relay);
+//     }
 
-    // Admin functions
-    function setRelay(address _relay) external onlyOwner {
-        require(_relay != address(0), "Invalid relay address");
-        relay = IMessageRelay(_relay);
-        emit RelayUpdated(_relay);
-    }
+//     // Admin functions
+//     function setRelay(address _relay) external onlyOwner {
+//         require(_relay != address(0), "Invalid relay address");
+//         relay = IMessageRelay(_relay);
+//         emit RelayUpdated(_relay);
+//     }
 
-    function setSupportedChain(
-        uint32 chainId,
-        bool supported
-    ) external onlyOwner {
-        supportedChains[chainId] = supported;
-        emit ChainStatusUpdated(chainId, supported);
-    }
+//     function setSupportedChain(
+//         uint32 chainId,
+//         bool supported
+//     ) external onlyOwner {
+//         supportedChains[chainId] = supported;
+//         emit ChainStatusUpdated(chainId, supported);
+//     }
 
-    function pause() external onlyOwner {
-        _pause();
-    }
+//     function pause() external onlyOwner {
+//         _pause();
+//     }
 
-    function unpause() external onlyOwner {
-        _unpause();
-    }
+//     function unpause() external onlyOwner {
+//         _unpause();
+//     }
 
-    // Main dispatch function
-    function dispatch(
-        uint32 destinationChainId,
-        address recipient,
-        bytes calldata message
-    ) external nonReentrant whenNotPaused returns (bytes32) {
-        require(supportedChains[destinationChainId], "Unsupported chain");
-        require(recipient != address(0), "Invalid recipient");
+//     // Main dispatch function
+//     function dispatch(
+//         uint32 destinationChainId,
+//         address recipient,
+//         bytes calldata message
+//     ) external nonReentrant whenNotPaused returns (bytes32) {
+//         require(supportedChains[destinationChainId], "Unsupported chain");
+//         require(recipient != address(0), "Invalid recipient");
 
-        // Create message ID using current nonce
-        bytes32 messageId = keccak256(
-            abi.encodePacked(
-                block.chainid,
-                destinationChainId,
-                msg.sender,
-                recipient,
-                nonce,
-                message
-            )
-        );
+//         // Create message ID using current nonce
+//         bytes32 messageId = keccak256(
+//             abi.encodePacked(
+//                 block.chainid,
+//                 destinationChainId,
+//                 msg.sender,
+//                 recipient,
+//                 nonce,
+//                 message
+//             )
+//         );
 
-        // Send message through relay
-        relay.sendMessage(destinationChainId, recipient, message);
+//         // Send message through relay
+//         relay.sendMessage(destinationChainId, recipient, message);
 
-        // Track message
-        sentMessages[messageId] = true;
-        nonce++;
+//         // Track message
+//         sentMessages[messageId] = true;
+//         nonce++;
 
-        emit MessageDispatched(
-            messageId,
-            destinationChainId,
-            recipient,
-            message,
-            nonce - 1
-        );
+//         emit MessageDispatched(
+//             messageId,
+//             destinationChainId,
+//             recipient,
+//             message,
+//             nonce - 1
+//         );
 
-        return messageId;
-    }
-}
+//         return messageId;
+//     }
+// }
 
-// Contract for receiving messages (on destination chain)
-contract MessageHandler is Ownable, Pausable, ReentrancyGuard {
-    IMessageRelay public relay;
+// // Contract for receiving messages (on destination chain)
+// contract MessageHandler is Ownable, Pausable, ReentrancyGuard {
+//     IMessageRelay public relay;
 
-    // Message tracking
-    mapping(bytes32 => bool) public processedMessages;
+//     // Message tracking
+//     mapping(bytes32 => bool) public processedMessages;
 
-    // Chain configuration
-    mapping(uint32 => bool) public trustedSources;
-    mapping(address => bool) public trustedSenders;
+//     // Chain configuration
+//     mapping(uint32 => bool) public trustedSources;
+//     mapping(address => bool) public trustedSenders;
 
-    // Events
-    event MessageProcessed(
-        bytes32 indexed messageId,
-        uint32 sourceChainId,
-        address sender,
-        bytes message
-    );
-    event TrustedSourceUpdated(uint32 chainId, bool trusted);
-    event TrustedSenderUpdated(address sender, bool trusted);
+//     // Events
+//     event MessageProcessed(
+//         bytes32 indexed messageId,
+//         uint32 sourceChainId,
+//         address sender,
+//         bytes message
+//     );
+//     event TrustedSourceUpdated(uint32 chainId, bool trusted);
+//     event TrustedSenderUpdated(address sender, bool trusted);
 
-    constructor(address _relay) {
-        relay = IMessageRelay(_relay);
-    }
+//     constructor(address _relay) {
+//         relay = IMessageRelay(_relay);
+//     }
 
-    // Admin functions
-    function setTrustedSource(uint32 chainId, bool trusted) external onlyOwner {
-        trustedSources[chainId] = trusted;
-        emit TrustedSourceUpdated(chainId, trusted);
-    }
+//     // Admin functions
+//     function setTrustedSource(uint32 chainId, bool trusted) external onlyOwner {
+//         trustedSources[chainId] = trusted;
+//         emit TrustedSourceUpdated(chainId, trusted);
+//     }
 
-    function setTrustedSender(address sender, bool trusted) external onlyOwner {
-        trustedSenders[sender] = trusted;
-        emit TrustedSenderUpdated(sender, trusted);
-    }
+//     function setTrustedSender(address sender, bool trusted) external onlyOwner {
+//         trustedSenders[sender] = trusted;
+//         emit TrustedSenderUpdated(sender, trusted);
+//     }
 
-    function pause() external onlyOwner {
-        _pause();
-    }
+//     function pause() external onlyOwner {
+//         _pause();
+//     }
 
-    function unpause() external onlyOwner {
-        _unpause();
-    }
+//     function unpause() external onlyOwner {
+//         _unpause();
+//     }
 
-    // Message handling
-    function handleMessage(
-        bytes32 messageId,
-        uint32 sourceChainId,
-        address sender,
-        bytes calldata message
-    ) external nonReentrant whenNotPaused {
-        require(trustedSources[sourceChainId], "Untrusted source chain");
-        require(trustedSenders[sender], "Untrusted sender");
-        require(!processedMessages[messageId], "Message already processed");
+//     // Message handling
+//     function handleMessage(
+//         bytes32 messageId,
+//         uint32 sourceChainId,
+//         address sender,
+//         bytes calldata message
+//     ) external nonReentrant whenNotPaused {
+//         require(trustedSources[sourceChainId], "Untrusted source chain");
+//         require(trustedSenders[sender], "Untrusted sender");
+//         require(!processedMessages[messageId], "Message already processed");
 
-        // Verify message through relay
-        require(
-            relay.verifyMessage(messageId, sourceChainId, sender, message),
-            "Message verification failed"
-        );
+//         // Verify message through relay
+//         require(
+//             relay.verifyMessage(messageId, sourceChainId, sender, message),
+//             "Message verification failed"
+//         );
 
-        // Mark message as processed
-        processedMessages[messageId] = true;
+//         // Mark message as processed
+//         processedMessages[messageId] = true;
 
-        // Process the message
-        _processMessage(messageId, sourceChainId, sender, message);
+//         // Process the message
+//         _processMessage(messageId, sourceChainId, sender, message);
 
-        emit MessageProcessed(messageId, sourceChainId, sender, message);
-    }
+//         emit MessageProcessed(messageId, sourceChainId, sender, message);
+//     }
 
-    // Internal message processing logic
-    function _processMessage(
-        bytes32 messageId,
-        uint32 sourceChainId,
-        address sender,
-        bytes calldata message
-    ) internal virtual {
-        // Override this function to implement specific message handling logic
-    }
-}
+//     // Internal message processing logic
+//     function _processMessage(
+//         bytes32 messageId,
+//         uint32 sourceChainId,
+//         address sender,
+//         bytes calldata message
+//     ) internal virtual {
+//         // Override this function to implement specific message handling logic
+//     }
+// }
