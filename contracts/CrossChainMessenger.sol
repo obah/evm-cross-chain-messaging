@@ -1,16 +1,16 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
-contract Dispatcher is Ownable, Pausable, ReentrancyGuard {
+contract CrossChainMessenger is Pausable, ReentrancyGuard {
     error UnsupportedChain();
     error InvalidAddress();
     error MessageProcessed();
     error VerificationFailed();
     error CallFailed();
+    error Unathorized();
 
     event MessageSent(
         address to,
@@ -30,16 +30,15 @@ contract Dispatcher is Ownable, Pausable, ReentrancyGuard {
         uint256 indexed messageId
     );
 
-    constructor() Ownable(msg.sender) {}
-
     struct Message {
         uint32 sourceChainId;
         uint32 destinationChainId;
         address sender;
         address recipient;
         bytes message;
-        bool executed;
     }
+
+    address public immutable OWNER;
 
     uint256 public nonce;
 
@@ -47,6 +46,15 @@ contract Dispatcher is Ownable, Pausable, ReentrancyGuard {
     mapping(uint32 => bool) public supportedChains;
     mapping(bytes32 => bool) public processedMessages;
     mapping(bytes32 => Message) public messages;
+
+    modifier onlyOwner() {
+        if (msg.sender != OWNER) revert Unathorized();
+        _;
+    }
+
+    constructor() {
+        OWNER = msg.sender;
+    }
 
     //todo implement bridge later using across
     // function bridge() external {};
@@ -107,14 +115,14 @@ contract Dispatcher is Ownable, Pausable, ReentrancyGuard {
         if (processedMessages[_messageHash]) revert MessageProcessed();
         if (_targetAddress == address(0)) revert InvalidAddress();
 
-        bool verify = _verifyMessage(
-            _messageHash,
-            _fromChainId,
-            _userAddress,
-            _message
-        );
+        // bool verify = _verifyMessage(
+        //     _messageHash,
+        //     _fromChainId,
+        //     _userAddress,
+        //     _message
+        // );
 
-        if (!verify) revert VerificationFailed();
+        // if (!verify) revert VerificationFailed();
 
         processedMessages[_messageHash] = true;
 
@@ -132,7 +140,7 @@ contract Dispatcher is Ownable, Pausable, ReentrancyGuard {
     function setSupportedChain(
         uint32 chainId,
         bool supported
-    ) internal onlyOwner {
+    ) external onlyOwner {
         supportedChains[chainId] = supported;
 
         emit ChainStatusUpdated(chainId, supported);
@@ -146,19 +154,18 @@ contract Dispatcher is Ownable, Pausable, ReentrancyGuard {
         _unpause();
     }
 
-    function _verifyMessage(
-        bytes32 _messageHash,
-        uint32 _sourceChainId,
-        address _userAddress,
-        bytes calldata _message
-    ) internal view returns (bool) {
-        Message storage message = messages[_messageHash];
+    // function _verifyMessage(
+    //     bytes32 _messageHash,
+    //     uint32 _sourceChainId,
+    //     address _userAddress,
+    //     bytes calldata _message
+    // ) internal view returns (bool) {
+    //     Message storage message = messages[_messageHash];
 
-        return (message.sourceChainId == _sourceChainId &&
-            message.sender == _userAddress &&
-            keccak256(message.message) == keccak256(_message) &&
-            message.executed);
-    }
+    //     return (message.sourceChainId == _sourceChainId &&
+    //         message.sender == _userAddress &&
+    //         keccak256(message.message) == keccak256(_message));
+    // }
 
     function getFunctionBytes(
         string memory _functionSig,
